@@ -56,9 +56,10 @@ private:
         }
 
         if (client.connect(PROJECT_NAME, _username.c_str(), _password.c_str())) {
+            Serial.println("Connected to mqtt");
             return true;
         } else {
-            Serial.print("FAIL connect to mqtt");
+            Serial.print("FAIL connect to mqtt rc=");
             Serial.println(client.state());
             return false;
         }
