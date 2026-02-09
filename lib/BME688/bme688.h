@@ -98,15 +98,19 @@ private:
 
     void _checkBME688Status() const {
         if (_bme688.status < BSEC_OK) {
-            Serial.println("BSEC error code : " + String(_bme688.status));
+            Serial.print("BSEC error code : ");
+            Serial.println(_bme688.status);
         } else if (_bme688.status > BSEC_OK) {
-            Serial.println("BSEC warning code : " + String(_bme688.status));
+            Serial.print("BSEC warning code : ");
+            Serial.println(_bme688.status);
         }
 
         if (_bme688.sensor.status < BME68X_OK) {
-            Serial.println("BME68X error code : " + String(_bme688.sensor.status));
+            Serial.print("BME68X error code : ");
+            Serial.println(_bme688.sensor.status);
         } else if (_bme688.sensor.status > BME68X_OK) {
-            Serial.println("BME68X warning code : " + String(_bme688.sensor.status));
+            Serial.print("BME68X warning code : ");
+            Serial.println(_bme688.sensor.status);
         }
     }
 

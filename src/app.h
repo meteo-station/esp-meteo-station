@@ -30,20 +30,40 @@ public:
     void tick() {
         uint32_t now = millis();
 
+        // Проверяем статус мигания
+        _checkBlinkStatus();
 
-        // Читаем метео сенсоры
-        _meteoSensors.tick();
-        _meteoSensors.readMeteoData(now, _sensorData);
-
+        // Поддерживаем коннект MQTT
         _mqttClient.tick(now);
 
+        // Тикаем сенсоры, чтобы все работало
+        _meteoSensors.tick();
+
+        // Если нет коннекта MQTT
+        if (!_mqttClient.isConnected()) {
+
+            // Мигаем и выходим
+            _triggerBlink();
+            return;
+        }
+
+        // Раз в секунду
         if (now - lastMessageSentAt >= 1000) {
             lastMessageSentAt = now;
+
+            // Читаем сенсоры
+            _meteoSensors.readMeteoData(now, _sensorData);
+
+            // Формируем JSON, убеждаемся, что он не пустой
             if (_buildMeteoDataJSON(payload, sizeof(payload)) && strcmp(payload, "{}") != 0) {
+
+                // Логгируем JSON
                 Serial.println(payload);
+
+                // Отправляем данные
                 if (_mqttClient.sendMeteoData("esp-meteo-station/01/data", payload) == false) {
                     Serial.println("Failed to send meteo data");
-                };
+                }
             }
         }
     }
@@ -54,10 +74,28 @@ private:
     char payload[512];
 
     uint32_t lastMessageSentAt = 0;
+    bool _isBlinking = false;
+    uint32_t _lastBlinkChangingStateTime = 0;
 
     MeteoSensors &_meteoSensors;
     MQTTClient &_mqttClient;
     GyverDBFile &_db;
+
+    void _checkBlinkStatus() {
+        if (_isBlinking && (millis() - _lastBlinkChangingStateTime >= 100)) {
+            digitalWrite(LED_BUILTIN, HIGH);
+            _isBlinking = false;
+            _lastBlinkChangingStateTime = millis();
+        }
+    }
+
+    void _triggerBlink() {
+        if (!_isBlinking && (millis() - _lastBlinkChangingStateTime >= 100)) {
+            digitalWrite(LED_BUILTIN, LOW);
+            _lastBlinkChangingStateTime = millis();
+            _isBlinking = true;
+        }
+    }
 
     bool _buildMeteoDataJSON(
         char *buffer,
