@@ -5,19 +5,22 @@
 #include <AsyncMqttClient.h>
 
 #include "config.h"
+#include "logger.h"
 
 class MQTTClient {
 public:
     MQTTClient() {
         _client.onConnect([this](bool sessionPresent) {
-            Serial.println("Connected to MQTT.");
+            log(LOG_INFO, "Connected to MQTT");
             _connecting = false; // Сбрасываем флаг попытки
         });
 
         _client.onDisconnect([this](AsyncMqttClientDisconnectReason reason) {
-            Serial.print("Disconnected from MQTT. Reason: ");
-            Serial.println((int)reason);
+            log(LOG_ERROR, "Disconnected from MQTT. Reason: %d", (int)reason);
             _connecting = false; // Готовы пробовать снова
+        });
+        _client.onPublish([this](uint16_t packetId) {
+            _pendingMessages--; // Пакет успешно улетел
         });
     }
 
@@ -28,9 +31,9 @@ public:
         _password = password;
 
         _client.setServer(_server.c_str(), _port);
+        _client.setKeepAlive(60);
         _client.setCredentials(_username.c_str(), _password.c_str());
-        Serial.print("MQTT Client ID: ");
-        Serial.println(PROJECT_NAME);
+        log(LOG_INFO, "MQTT Client ID: %s", PROJECT_NAME);
         _client.setClientId(PROJECT_NAME);
 
         // Первая попытка подключения
@@ -38,6 +41,15 @@ public:
     }
 
     void tick(uint32_t now) {
+
+        // Даем перехватить управление сетевому стеку
+        delay(5);
+
+        if (_client.connected() && now - _lastLogTime > 5000) {
+            _lastLogTime = now;
+            log(LOG_DEBUG, "Pending messages in MQTT queue: %d", _pendingMessages);
+        }
+
         // Если уже подключены или прямо сейчас в процессе коннекта — ничего не делаем
         if (_client.connected() || _connecting) {
             return;
@@ -50,7 +62,7 @@ public:
             if (now - _lastConnectAttempt > 2000) {
                 _lastConnectAttempt = now;
                 _connecting = true; // Ставим флаг, чтобы не вызывать connect() повторно в следующем loop
-                Serial.println("Starting connection to MQTT...");
+                log(LOG_INFO, "Starting connection to MQTT...");
                 _client.connect();
             }
         }
@@ -59,7 +71,11 @@ public:
         if (!_client.connected()) return false;
 
         uint16_t packetId = _client.publish(topic, 1, retain, payload);
-        return packetId > 0;
+        if (packetId > 0) {
+            _pendingMessages++;
+            return true;
+        }
+        return false;
     }
 
     bool isConnected() {
@@ -79,13 +95,15 @@ public:
 private:
     void _connectToMqtt() {
         if (WiFi.status() == WL_CONNECTED) {
-            Serial.println("Connecting to MQTT (async)...");
+            log(LOG_INFO, "Connecting to MQTT...");
             _client.connect();
         }
     }
 
     AsyncMqttClient _client;
-    bool _connecting = false; // Флаг «в процессе подключения»
+    bool _connecting = false;
+    int _pendingMessages = 0;
+    uint32_t _lastLogTime = 0;
 
     String _username;
     String _password;

@@ -58,11 +58,11 @@ public:
             if (_buildMeteoDataJSON(payload, sizeof(payload)) && strcmp(payload, "{}") != 0) {
 
                 // Логгируем JSON
-                Serial.println(payload);
+                log(LOG_DEBUG, payload);
 
                 // Отправляем данные
                 if (_mqttClient.sendMeteoData("esp-meteo-station/01/data", payload) == false) {
-                    Serial.println("Failed to send meteo data");
+                    log(LOG_ERROR, "Failed to send meteo data");
                 }
             }
         }
@@ -103,11 +103,15 @@ private:
     ) {
         JsonDocument doc;
 
-        doc["bme280_t"] = _sensorData.bme280.temperature;
-        doc["bme280_p"] = _sensorData.bme280.pressure;
+        if (_sensorData.bme280.is_valid) {
+            doc["bme280_t"] = _sensorData.bme280.temperature;
+            doc["bme280_p"] = _sensorData.bme280.pressure;
+        }
 
-        doc["htu21d_t"] = _sensorData.htu21d.temperature;
-        doc["htu21d_h"] = _sensorData.htu21d.humidity;
+        if (_sensorData.htu21d.is_valid) {
+            doc["htu21d_t"] = _sensorData.htu21d.temperature;
+            doc["htu21d_h"] = _sensorData.htu21d.humidity;
+        }
 
         if (_sensorData.bme688.is_valid) {
             doc["bme688_t"] = _sensorData.bme688.temperature;

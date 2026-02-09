@@ -16,8 +16,7 @@ void setup() {
 
     WiFiConnector.onConnect([]() {
         // Пишем в консоль
-        Serial.print("Local IP: ");
-        Serial.println(WiFi.localIP());
+        log(LOG_INFO, "Local IP: %s", WiFi.localIP().toString().c_str());
 
         // Проверяем обновления прошивки
         ota.checkUpdate();
@@ -26,7 +25,7 @@ void setup() {
     // Регистрируем коллбэк на ошибку подключения к Wi-fi
     WiFiConnector.onError([]() {
         // Пишем в консоль
-        Serial.println("WiFi error");
+        log(LOG_ERROR, "WiFi error");
     });
 
     db_init();
@@ -34,20 +33,19 @@ void setup() {
     // Подключаемся к Wi-Fi по заданным из бд названию и паролю
     WiFiConnector.connect(db[kk::wifi_ssid], db[kk::wifi_pass]);
 
-    Serial.print("Connecting to WiFi...");
+    log(LOG_INFO, "Connecting to WiFi...");
     while (WiFi.status() != WL_CONNECTED) {
 
         WiFiConnector.tick();
         delay(500);
-        Serial.print(".");
 
         if (millis() > 30000) {
 
-            Serial.println("WiFi connection timeout!");
+            log(LOG_ERROR, "WiFi connection timeout!");
             break;
         }
     }
-    Serial.println("Connected!");
+    log(LOG_INFO, "Connected!");
 
 
     // Инициализация настроек и сервера
@@ -61,6 +59,8 @@ void setup() {
 
     app.begin();
     digitalWrite(LED_BUILTIN, HIGH);
+
+    delay(500);
 }
 
 void loop() {
