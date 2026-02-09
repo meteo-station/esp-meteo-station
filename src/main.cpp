@@ -5,7 +5,7 @@
 #include <AutoOTA.h>
 #include "settings.h"
 
-App app(sensors, encoder, display, mqtt_client, db);
+App app(sensors, mqtt_client, db);
 
 void setup() {
     Serial.begin(115200);

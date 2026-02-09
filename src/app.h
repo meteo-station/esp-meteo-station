@@ -39,8 +39,11 @@ public:
 
         if (now - lastMessageSentAt >= 1000) {
             lastMessageSentAt = now;
-            if (_buildMeteoDataJSON(payload, sizeof(payload))) {
-                _mqttClient.sendMeteoData("esp-meteo-station/01/data", payload);
+            if (_buildMeteoDataJSON(payload, sizeof(payload)) && strcmp(payload, "{}") != 0) {
+                Serial.println(payload);
+                if (_mqttClient.sendMeteoData("esp-meteo-station/01/data", payload) == false) {
+                    Serial.println("Failed to send meteo data");
+                };
             }
         }
     }
@@ -48,7 +51,7 @@ public:
 private:
     MeteoSensorData _sensorData;
 
-    char payload[128];
+    char payload[512];
 
     uint32_t lastMessageSentAt = 0;
 
@@ -62,10 +65,29 @@ private:
     ) {
         JsonDocument doc;
 
-        doc["t1"] = _sensorData.temperature_1;
-        doc["t2"] = _sensorData.temperature_2;
-        doc["h"] = _sensorData.humidity;
-        doc["p"] = _sensorData.pressure;
+        doc["bme280_t"] = _sensorData.bme280.temperature;
+        doc["bme280_p"] = _sensorData.bme280.pressure;
+
+        doc["htu21d_t"] = _sensorData.htu21d.temperature;
+        doc["htu21d_h"] = _sensorData.htu21d.humidity;
+
+        if (_sensorData.bme688.is_valid) {
+            doc["bme688_t"] = _sensorData.bme688.temperature;
+            doc["bme688_p"] = _sensorData.bme688.pressure;
+            doc["bme688_h"] = _sensorData.bme688.humidity;
+            doc["bme688_eco2"] = _sensorData.bme688.eco2;
+            doc["bme688_evo2_acc"] = _sensorData.bme688.evoc_accuracy;
+            doc["bme688_evoc"] = _sensorData.bme688.evoc;
+            doc["bme688_evoc_acc"] = _sensorData.bme688.evoc_accuracy;
+            doc["bme688_gas_perc"] = _sensorData.bme688.gas_percentage;
+            doc["bme688_gas_perc_acc"] = _sensorData.bme688.gas_percentage_accuracy;
+            doc["bme688_iaq"] = _sensorData.bme688.iaq;
+            doc["bme688_iaq_acc"] = _sensorData.bme688.iaq_accuracy;
+            doc["bme688_iaq_stat"] = _sensorData.bme688.iaq_static;
+            doc["bme688_iaq_stat_acc"] = _sensorData.bme688.iaq_static_accuracy;
+            doc["bme688_stab_stat"] = _sensorData.bme688.stabilization_status;
+            doc["bme688_run_in_stat"] = _sensorData.bme688.run_in_status;
+        }
 
         return serializeJson(doc, buffer, bufferSize) > 0;
     }

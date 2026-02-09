@@ -12,7 +12,9 @@ public:
     }
 
     void begin(const String &serverURL, uint16_t port = 1883, const String &username = "", const String &password = "") {
+        #if IS_HTTPS_ENABLED == true
         wifiClient.setInsecure();
+        #endif
         _server = serverURL;
         _port = port;
         _username = username;
@@ -65,7 +67,12 @@ private:
         }
     }
 
+    #if IS_HTTPS_ENABLED == true
     WiFiClientSecure wifiClient;
+    #else
+    WiFiClient wifiClient;
+    #endif
+
     PubSubClient client;
 
     String _username;
