@@ -31,7 +31,11 @@ public:
 
         out.bme280.temperature = _bme280.readTemperature();
         out.bme280.pressure = _bme280.readPressure() / 133.322f;
-        out.bme280.is_valid = true;
+        if (out.bme280.temperature == 0 || out.bme280.pressure) {
+            out.bme280.is_valid = false;
+        } else {
+            out.bme280.is_valid = true;
+        }
 
         if (_htu_is_ready) {
             out.htu21d.temperature = _htu.getTemperature();

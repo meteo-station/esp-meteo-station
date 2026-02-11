@@ -41,7 +41,6 @@ public:
 
         // Если нет коннекта MQTT
         if (!_mqttClient.isConnected()) {
-
             // Мигаем и выходим
             _triggerBlink();
             return;
@@ -56,7 +55,6 @@ public:
 
             // Формируем JSON, убеждаемся, что он не пустой
             if (_buildMeteoDataJSON(payload, sizeof(payload)) && strcmp(payload, "{}") != 0) {
-
                 // Логгируем JSON
                 log(LOG_DEBUG, payload);
 
@@ -117,16 +115,37 @@ private:
             doc["bme688_t"] = _sensorData.bme688.temperature;
             doc["bme688_p"] = _sensorData.bme688.pressure;
             doc["bme688_h"] = _sensorData.bme688.humidity;
-            doc["bme688_eco2"] = _sensorData.bme688.eco2;
-            doc["bme688_evo2_acc"] = _sensorData.bme688.evoc_accuracy;
-            doc["bme688_evoc"] = _sensorData.bme688.evoc;
+
+            // CO2
+            if (_sensorData.bme688.eco2_accuracy != 0) {
+                doc["bme688_eco2"] = _sensorData.bme688.eco2;
+            }
+            doc["bme688_evo2_acc"] = _sensorData.bme688.eco2_accuracy;
+
+            // EVOC
+            if (_sensorData.bme688.evoc_accuracy != 0) {
+                doc["bme688_evoc"] = _sensorData.bme688.evoc;
+            }
             doc["bme688_evoc_acc"] = _sensorData.bme688.evoc_accuracy;
-            doc["bme688_gas_perc"] = _sensorData.bme688.gas_percentage;
+
+            // Gas percentage
+            if (_sensorData.bme688.gas_percentage_accuracy != 0) {
+                doc["bme688_gas_perc"] = _sensorData.bme688.gas_percentage;
+            }
             doc["bme688_gas_perc_acc"] = _sensorData.bme688.gas_percentage_accuracy;
-            doc["bme688_iaq"] = _sensorData.bme688.iaq;
+
+            // IAQ
+            if (_sensorData.bme688.iaq_accuracy != 0) {
+                doc["bme688_iaq"] = _sensorData.bme688.iaq;
+            }
             doc["bme688_iaq_acc"] = _sensorData.bme688.iaq_accuracy;
-            doc["bme688_iaq_stat"] = _sensorData.bme688.iaq_static;
+
+            // IAQ static
+            if (_sensorData.bme688.iaq_static_accuracy != 0) {
+                doc["bme688_iaq_stat"] = _sensorData.bme688.iaq_static;
+            }
             doc["bme688_iaq_stat_acc"] = _sensorData.bme688.iaq_static_accuracy;
+
             doc["bme688_stab_stat"] = _sensorData.bme688.stabilization_status;
             doc["bme688_run_in_stat"] = _sensorData.bme688.run_in_status;
         }
