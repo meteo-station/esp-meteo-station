@@ -14,7 +14,8 @@ public:
     // Формат файла. Поднимай версию, если меняется набор подписок или
     // версия BSEC — старое состояние тогда само отбросится
     static constexpr uint32_t STATE_MAGIC = 0x42535543; // "BSUC"
-    static constexpr uint8_t STATE_VERSION = 1;
+    // v2: добавлен setConfig — состояние от предыдущей конфигурации несовместимо
+    static constexpr uint8_t STATE_VERSION = 2;
 
     // Как часто перезаписываем состояние. Блоб ~238 байт, но LittleFS стирает
     // сектор 4 КБ целиком, а ресурс флеша конечен — чаще нельзя
@@ -54,11 +55,24 @@ public:
             BSEC_OUTPUT_RUN_IN_STATUS,
         };
 
+        // Конфигурация BSEC: 3.3 В, период 3 с (LP), калибровка 4 дня.
+        // Должна соответствовать sampleRate, иначе updateSubscription вернет
+        // предупреждение 14 (BSEC_W_SU_SAMPLERATEMISMATCH). Для ULP нужен
+        // вариант ..._300s_4d
+        const uint8_t bsecConfig[] = {
+            #include "config/bme688/bme688_sel_33v_3s_4d/bsec_selectivity.txt"
+        };
+
         if (!_bme688.begin(BME68X_I2C_ADDR_HIGH, Wire)) {
             _checkBME688Status();
         }
 
-        // Восстанавливаем калибровку до updateSubscription (порядок из примеров Bosch)
+        // Порядок из примеров Bosch: begin -> setConfig -> setState -> updateSubscription
+        if (!_bme688.setConfig(bsecConfig)) {
+            _checkBME688Status();
+        }
+
+        // Восстанавливаем калибровку
         _loadState();
 
         if (sampleRate == BSEC_SAMPLE_RATE_ULP) {
