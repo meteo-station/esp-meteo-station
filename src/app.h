@@ -50,11 +50,13 @@ public:
         if (now - lastMessageSentAt >= 1000) {
             lastMessageSentAt = now;
 
-            // Читаем сенсоры
-            _meteoSensors.readMeteoData(now, _sensorData);
+            // Читаем сенсоры. Если свежих данных нет — отправлять нечего
+            if (!_meteoSensors.readMeteoData(now, _sensorData)) {
+                return;
+            }
 
-            // Формируем JSON, убеждаемся, что он не пустой
-            if (_buildMeteoDataJSON(payload, sizeof(payload)) && strcmp(payload, "{}") != 0) {
+            // Формируем JSON. Вернет false, если ни один датчик не дал валидных данных
+            if (_buildMeteoDataJSON(payload, sizeof(payload))) {
                 // Логгируем JSON
                 log(LOG_DEBUG, payload);
 
@@ -150,6 +152,30 @@ private:
             doc["bme688_run_in_stat"] = _sensorData.bme688.run_in_status;
         }
 
-        return serializeJson(doc, buffer, bufferSize) > 0;
+        if (_sensorData.scd41.is_valid) {
+            doc["scd41_t"] = _sensorData.scd41.temperature;
+            doc["scd41_h"] = _sensorData.scd41.humidity;
+            doc["scd41_co2"] = _sensorData.scd41.co2;
+        }
+
+        // Ни один датчик не дал валидных данных. Пустой JsonDocument
+        // сериализуется в "null", поэтому отсекаем его здесь, а не по строке
+        if (doc.size() == 0) {
+            return false;
+        }
+
+        // Данные не влезли в буфер — лучше не слать обрезанный JSON
+        if (doc.overflowed()) {
+            log(LOG_ERROR, "Meteo data JSON overflowed the document");
+            return false;
+        }
+
+        size_t written = serializeJson(doc, buffer, bufferSize);
+        if (written == 0 || written >= bufferSize) {
+            log(LOG_ERROR, "Meteo data JSON does not fit into %u byte buffer", (unsigned) bufferSize);
+            return false;
+        }
+
+        return true;
     }
 };

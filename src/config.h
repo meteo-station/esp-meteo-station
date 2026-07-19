@@ -12,6 +12,9 @@
 // Настройки BME688
 #define BME688_SAMPLE_RATE		BSEC_SAMPLE_RATE_LP
 
+// Настройки SCD41: false — измерение раз в 5 с, true — раз в 30 с
+#define SCD41_LOW_POWER			false
+
 #define IS_HTTPS_ENABLED false
 
 #define LOG_LEVEL LOG_INFO
