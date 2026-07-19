@@ -34,7 +34,16 @@ void build(sets::Builder& b) {
             mqtt_client.changeURL(db[kk::mqtt_address], db[kk::mqtt_port].toInt16(), db[kk::mqtt_user], db[kk::mqtt_pass]);
         }
     }
+    {
+        sets::Group g(b, "BME688");
 
+        // Калибровка BSEC привязана к помещению. При переезде ее надо сбросить,
+        // иначе старое состояние будет тянуть показания воздуха назад
+        if (b.Confirm("bme688_reset"_h, "Сбросить калибровку BME688 и перезагрузиться?")) {
+            BME688::resetSavedState();
+            ESP.restart();
+        }
+    }
 
     if (b.Confirm("update"_h)) ota.update();
 }
