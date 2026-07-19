@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 
-#include <ArduinoJson.h>
 #include "db.h"
 #include "meteoSensors.h"
 #include "mqtt.h"
@@ -55,23 +54,22 @@ public:
                 return;
             }
 
-            // Формируем JSON. Вернет false, если ни один датчик не дал валидных данных
-            if (_buildMeteoDataJSON(payload, sizeof(payload))) {
-                // Логгируем JSON
-                log(LOG_DEBUG, payload);
-
-                // Отправляем данные
-                if (_mqttClient.sendMeteoData("esp-meteo-station/01/data", payload) == false) {
-                    log(LOG_ERROR, "Failed to send meteo data");
-                }
-            }
+            _publishMeteoData();
         }
     }
 
 private:
     MeteoSensorData _sensorData;
 
-    char payload[512];
+    // Каждая метрика едет в свой топик: <base>/<датчик>/<метрика>, payload —
+    // голое число. Раньше всё уезжало одним JSON в <base>/data, и потребители
+    // (HA, telegraf, go-exporter) разбирали его сами. Проблема была в том, что
+    // объект собирался только из валидных в этом цикле значений: датчик не
+    // ответил или BSEC ещё не откалибровался — ключ просто отсутствовал, и на
+    // той стороне шаблоны падали на "dict object has no attribute", сбрасывая
+    // состояние. Отдельный топик на метрику убирает сам класс проблемы: нет
+    // данных — нет публикации, а retained хранит последнее известное значение.
+    static constexpr const char *MQTT_BASE_TOPIC = "esp-meteo-station/01";
 
     uint32_t lastMessageSentAt = 0;
     bool _isBlinking = false;
@@ -97,85 +95,67 @@ private:
         }
     }
 
-    bool _buildMeteoDataJSON(
-        char *buffer,
-        size_t bufferSize
-    ) {
-        JsonDocument doc;
+    // Публикация одной метрики. Топик и payload собираются в локальные буферы:
+    // держать их полями класса смысла нет, а на стеке ESP8266 32+16 байт дешевле,
+    // чем постоянно занятая память.
+    void _publishMetric(const char *sensor, const char *metric, float value, uint8_t decimals) {
+        char topic[64];
+        char payload[16];
 
+        snprintf(topic, sizeof(topic), "%s/%s/%s", MQTT_BASE_TOPIC, sensor, metric);
+        // %.*f вместо dtostrf: снимает вопрос с размером буфера под мантиссу.
+        snprintf(payload, sizeof(payload), "%.*f", decimals, value);
+
+        if (!_mqttClient.sendMeteoData(topic, payload)) {
+            log(LOG_ERROR, "Failed to publish %s", topic);
+        }
+    }
+
+    void _publishMeteoData() {
         if (_sensorData.bme280.is_valid) {
-            doc["bme280_t"] = _sensorData.bme280.temperature;
-            doc["bme280_p"] = _sensorData.bme280.pressure;
+            _publishMetric("bme280", "t", _sensorData.bme280.temperature, 2);
+            _publishMetric("bme280", "p", _sensorData.bme280.pressure, 2);
         }
 
         if (_sensorData.htu21d.is_valid) {
-            doc["htu21d_t"] = _sensorData.htu21d.temperature;
-            doc["htu21d_h"] = _sensorData.htu21d.humidity;
+            _publishMetric("htu21d", "t", _sensorData.htu21d.temperature, 2);
+            _publishMetric("htu21d", "h", _sensorData.htu21d.humidity, 2);
         }
 
         if (_sensorData.bme688.is_valid) {
-            doc["bme688_t"] = _sensorData.bme688.temperature;
-            doc["bme688_p"] = _sensorData.bme688.pressure;
-            doc["bme688_h"] = _sensorData.bme688.humidity;
+            _publishMetric("bme688", "t", _sensorData.bme688.temperature, 2);
+            _publishMetric("bme688", "p", _sensorData.bme688.pressure, 2);
+            _publishMetric("bme688", "h", _sensorData.bme688.humidity, 2);
 
-            // CO2
+            // Значения публикуем только при ненулевой accuracy — до этого
+            // BSEC отдает несошедшуюся калибровку. Саму accuracy не шлем.
+            // Раньше это было главным источником "дырявых" сообщений: поле
+            // то появлялось, то исчезало внутри одного и того же JSON.
             if (_sensorData.bme688.eco2_accuracy != 0) {
-                doc["bme688_eco2"] = _sensorData.bme688.eco2;
+                _publishMetric("bme688", "eco2", _sensorData.bme688.eco2, 1);
             }
-            doc["bme688_evo2_acc"] = _sensorData.bme688.eco2_accuracy;
 
-            // EVOC
             if (_sensorData.bme688.evoc_accuracy != 0) {
-                doc["bme688_evoc"] = _sensorData.bme688.evoc;
+                _publishMetric("bme688", "evoc", _sensorData.bme688.evoc, 3);
             }
-            doc["bme688_evoc_acc"] = _sensorData.bme688.evoc_accuracy;
 
-            // Gas percentage
             if (_sensorData.bme688.gas_percentage_accuracy != 0) {
-                doc["bme688_gas_perc"] = _sensorData.bme688.gas_percentage;
+                _publishMetric("bme688", "gas_perc", _sensorData.bme688.gas_percentage, 1);
             }
-            doc["bme688_gas_perc_acc"] = _sensorData.bme688.gas_percentage_accuracy;
 
-            // IAQ
             if (_sensorData.bme688.iaq_accuracy != 0) {
-                doc["bme688_iaq"] = _sensorData.bme688.iaq;
+                _publishMetric("bme688", "iaq", _sensorData.bme688.iaq, 1);
             }
-            doc["bme688_iaq_acc"] = _sensorData.bme688.iaq_accuracy;
 
-            // IAQ static
             if (_sensorData.bme688.iaq_static_accuracy != 0) {
-                doc["bme688_iaq_stat"] = _sensorData.bme688.iaq_static;
+                _publishMetric("bme688", "iaq_stat", _sensorData.bme688.iaq_static, 1);
             }
-            doc["bme688_iaq_stat_acc"] = _sensorData.bme688.iaq_static_accuracy;
-
-            doc["bme688_stab_stat"] = _sensorData.bme688.stabilization_status;
-            doc["bme688_run_in_stat"] = _sensorData.bme688.run_in_status;
         }
 
         if (_sensorData.scd41.is_valid) {
-            doc["scd41_t"] = _sensorData.scd41.temperature;
-            doc["scd41_h"] = _sensorData.scd41.humidity;
-            doc["scd41_co2"] = _sensorData.scd41.co2;
+            _publishMetric("scd41", "t", _sensorData.scd41.temperature, 2);
+            _publishMetric("scd41", "h", _sensorData.scd41.humidity, 2);
+            _publishMetric("scd41", "co2", (float) _sensorData.scd41.co2, 0);
         }
-
-        // Ни один датчик не дал валидных данных. Пустой JsonDocument
-        // сериализуется в "null", поэтому отсекаем его здесь, а не по строке
-        if (doc.size() == 0) {
-            return false;
-        }
-
-        // Данные не влезли в буфер — лучше не слать обрезанный JSON
-        if (doc.overflowed()) {
-            log(LOG_ERROR, "Meteo data JSON overflowed the document");
-            return false;
-        }
-
-        size_t written = serializeJson(doc, buffer, bufferSize);
-        if (written == 0 || written >= bufferSize) {
-            log(LOG_ERROR, "Meteo data JSON does not fit into %u byte buffer", (unsigned) bufferSize);
-            return false;
-        }
-
-        return true;
     }
 };
